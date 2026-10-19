@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 分析 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=3">
+  <script src="/lib/echarts.min.js"></script>
+  <style>
+    .tab-btn { padding: 8px 18px; border-radius: 10px; cursor: pointer; font-size: 13px; color: var(--text-dim); border: 1px solid transparent; }
+    .tab-btn.active { color: #E5EAF5; background: rgba(34,211,238,.12); border-color: rgba(34,211,238,.4); }
+    .chat-box { background: rgba(11,18,32,.6); border: 1px solid rgba(139,155,184,.25); border-radius: 12px; padding: 14px; }
+    .chip { display: inline-block; padding: 4px 12px; margin: 3px; border-radius: 999px; font-size: 12px; cursor: pointer;
+            background: rgba(139,155,184,.1); border: 1px solid rgba(139,155,184,.3); color: var(--text-dim); }
+    .chip:hover { color: var(--primary); border-color: rgba(34,211,238,.5); }
+    .sql-code { font-family: Consolas, monospace; font-size: 12px; color: #A5F3FC; background: rgba(8,15,28,.8);
+                border: 1px solid rgba(34,211,238,.2); border-radius: 8px; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; }
+    .badge { padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge-HIGH { background: rgba(248,113,113,.18); color: #F87171; }
+    .badge-MEDIUM { background: rgba(251,191,36,.18); color: #FBBF24; }
+    .badge-LOW { background: rgba(52,211,153,.18); color: #34D399; }
+  </style>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-4 rise-in">
+    <div>
+      <div class="page-title">AI 分析</div>
+      <div style="color:var(--text-dim);font-size:13px">AI 解读报告（受限生成）· 对话式查数（NL2SQL）· 绩效离群检测</div>
+    </div>
+    <div class="flex gap-2">
+      <div class="tab-btn active" data-tab="interpret">AI 解读报告</div>
+      <div class="tab-btn" data-tab="nlquery">对话查数</div>
+      <div class="tab-btn" data-tab="anomaly">离群检测</div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 1: AI 解读报告 ═══ -->
+  <div id="tab-interpret">
+    <div class="flex gap-2 items-center mb-4">
+      <select id="aiAlgoSelect"></select>
+      <input type="date" id="aiFromDate">
+      <span style="color:var(--text-dim)">~</span>
+      <input type="date" id="aiToDate">
+      <button id="aiReportBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(34,211,238,.15);color:var(--primary);border:1px solid rgba(34,211,238,.4)">生成 AI 解读</button>
+      <span id="llmTag" style="font-size:11px;color:var(--text-dim)"></span>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4" id="reportKpis"></div>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="glass-panel p-4 col-span-2 lg:col-span-3">
+        <div class="section-title mb-2">解读叙事（结构化数据 → 受限生成）</div>
+        <div class="narrative-text" id="reportNarrative" style="min-height:180px"></div>
+        <div class="section-title mt-4 mb-2">行动建议</div>
+        <ul id="reportSuggestions" class="reason-list"></ul>
+      </div>
+      <div class="glass-panel p-4 col-span-2">
+        <div class="section-title mb-2">归因分析（绩效偏离贡献分解）</div>
+        <div id="attrChart" style="height:260px"></div>
+        <div style="color:var(--text-dim);font-size:11px">贡献 = (桶均值 − 整体均值) × 桶占比——正值为拖累，负值为优势</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 2: NL2SQL 对话查数 ═══ -->
+  <div id="tab-nlquery" style="display:none">
+    <div class="glass-panel p-4 rise-in">
+      <div class="section-title mb-2">对话式查数（自然语言 → 白名单校验 SQL → 图表）</div>
+      <div class="flex gap-2">
+        <input type="text" id="questionInput" placeholder="例如：kf_vwap_plus 近30天 VWAP 绩效走势"
+               style="flex:1">
+        <button id="askBtn" class="px-4 py-2 rounded-lg text-sm font-bold"
+                style="background:linear-gradient(90deg,rgba(34,211,238,.25),rgba(167,139,250,.25));color:#E5EAF5;border:1px solid rgba(34,211,238,.4)">
+          🔍 查询
+        </button>
+      </div>
+      <div class="mt-2" id="exampleChips"></div>
+      <div id="nlResult" style="display:none" class="mt-4">
+        <div class="chat-box mb-3">
+          <div style="font-size:12px;color:var(--text-dim)" id="understoodBox"></div>
+        </div>
+        <div class="sql-code mb-3" id="sqlBox"></div>
+        <div id="queryChart" style="height:300px"></div>
+        <table class="mt-3"><thead id="resultHead"></thead><tbody id="resultBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 3: 离群检测 ═══ -->
+  <div id="tab-anomaly" style="display:none">
+    <div class="flex gap-2 items-center mb-4">
+      <input type="date" id="anoDate">
+      <select id="anoAlgoSelect"><option value="">全部算法</option></select>
+      <button id="anoBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(251,113,133,.15);color:#F87171;border:1px solid rgba(251,113,133,.4)">检测离群母单</button>
+      <span id="anoSummary" style="color:var(--text-dim);font-size:12px"></span>
+    </div>
+    <div class="glass-panel p-4">
+      <div class="section-title mb-2">绩效离群母单（MAD 稳健 Z 分数多维检测，|z| ≥ 3.5）</div>
+      <table>
+        <thead><tr><th>母单ID</th><th>算法</th><th>标的</th><th>方向</th><th>VWAP绩效</th><th>撤单率</th><th>主偏离维度</th><th>偏离(×MAD)</th><th>异常分</th><th>等级</th><th>解读</th></tr></thead>
+        <tbody id="anoBody"></tbody>
+      </table>
+      <div style="color:var(--text-dim);font-size:11px">刻意采用分位数级无监督检测（可解释、CPU 可跑）：每条离群都可回答"偏离哪个维度、偏离多少倍 MAD"</div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=3"></script>
+<script>
+renderNav('ai');
+const date = todayStr();
+
+/* Tab 切换 */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    ['interpret', 'nlquery', 'anomaly'].forEach(t =>
+      document.getElementById('tab-' + t).style.display = t === btn.dataset.tab ? '' : 'none');
+  });
+});
+
+function typewriter(el, text) {
+  el.textContent = '';
+  let i = 0;
+  (function tick() {
+    if (i <= text.length) { el.textContent = text.slice(0, i++); setTimeout(tick, 12); }
+  })();
+}
+
+/* ═══ Tab 1: AI 解读 ═══ */
+document.getElementById('aiFromDate').value = date;
+document.getElementById('aiToDate').value = date;
+
+let reportSeq = 0;
+async function loadReport() {
+  const seq = ++reportSeq;
+  const algo = document.getElementById('aiAlgoSelect').value;
+  const from = document.getElementById('aiFromDate').value;
+  const to = document.getElementById('aiToDate').value;
+  const r = await api(`/api/ai/report/${algo}?from=${from}&to=${to}`);
+  if (seq !== reportSeq) return;   /* 丢弃过期响应，防止快速切换时旧数据覆盖新数据 */
+  if (r.error) { alert(r.error); return; }
+  document.getElementById('llmTag').textContent =
+    r.llmPowered ? '⚡ 私有化 LLM 生成' : '◇ 本地受限生成（未配置 LLM，模板引擎等价降级）';
+  const p = r.profile;
+  const kpis = [
+    ['期间母单', p.totalOrders], ['平均绩效(bps)', (+p.avgVwapBps).toFixed(2)],
+    ['平均完成率', (+p.avgFillRatio * 100).toFixed(1) + '%'], ['综合得分', p.avgScore],
+  ];
+  document.getElementById('reportKpis').innerHTML = kpis.map(([l, v]) => `
+    <div class="glass-panel p-4"><div class="kpi-label">${l}</div>
+    <div class="kpi-number mt-1">${v}</div></div>`).join('');
+  typewriter(document.getElementById('reportNarrative'), r.narrative);
+  document.getElementById('reportSuggestions').innerHTML =
+    r.suggestions.map(s => `<li>${s}</li>`).join('');
+
+  const attrData = (p.participationFindings || []).slice(0, 4);
+  echarts.init(document.getElementById('attrChart')).setOption({
+    ...chartBase,
+    tooltip: { trigger: 'axis', formatter: ps => `${ps[0].name}<br/>贡献 ${ps[0].value} bps` },
+    xAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    yAxis: { type: 'category', data: attrData.map(f => '市占率' + f.bucket), axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    series: [{
+      type: 'bar', data: attrData.map(f => +(+f.contributionBps).toFixed(2)),
+      itemStyle: { color: p => p.value >= 0 ? '#F87171' : '#34D399', borderRadius: 4 },
+      label: { show: true, color: '#8B9BB8', position: 'right', formatter: p => p.value },
+    }],
+  });
+}
+
+/* ═══ Tab 2: NL2SQL ═══ */
+async function askQuestion() {
+  const q = document.getElementById('questionInput').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('askBtn');
+  btn.disabled = true; btn.textContent = '生成中…';
+  try {
+    const resp = await fetch('/api/ai/nlquery', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    });
+    const data = await resp.json();
+    if (!resp.ok) { alert(data.error || '查询失败'); return; }
+    document.getElementById('nlResult').style.display = 'block';
+    const u = data.understood;
+    document.getElementById('understoodBox').innerHTML =
+      `意图：<b style="color:var(--primary)">${u.intentLabel}</b> · 指标：<b style="color:#A78BFA">${u.metric ?? '-'}</b>` +
+      ` · 算法：<b>${u.algoInstance ?? '全部'}</b> · 区间：${u.from} ~ ${u.to}` +
+      ` &nbsp;|&nbsp; SQL 来源：<b>${data.sqlSource === 'llm' ? '私有化 LLM 生成' : '本地规则引擎'}</b>（已过白名单守卫）`;
+    document.getElementById('sqlBox').textContent = data.sql;
+    const dims = data.rows.map(r => String(r.dim ?? r.trade_date ?? ''));
+    const vals = data.rows.map(r => r.val == null ? 0 : +(+r.val).toFixed(2));
+    echarts.init(document.getElementById('queryChart')).setOption({
+      ...chartBase,
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'category', data: dims, axisLine: { lineStyle: { color: '#8B9BB8' } } },
+      yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+      series: [{
+        name: data.chartTitle, type: data.chartType, smooth: true,
+        data: vals, itemStyle: { color: '#22D3EE', borderRadius: [5, 5, 0, 0] },
+        areaStyle: data.chartType === 'line' ? { opacity: 0.1 } : undefined,
+      }],
+    });
+    if (data.columns.length) {
+      document.getElementById('resultHead').innerHTML =
+        '<tr>' + data.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+      document.getElementById('resultBody').innerHTML = data.rows.slice(0, 20).map(r =>
+        '<tr>' + data.columns.map(c => `<td>${r[c] ?? '-'}</td>`).join('') + '</tr>').join('');
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 查询';
+  }
+}
+
+/* ═══ Tab 3: 离群检测 ═══ */
+document.getElementById('anoDate').value = date;
+let anoSeq = 0;
+async function detectAnomaly() {
+  const seq = ++anoSeq;
+  const d = document.getElementById('anoDate').value;
+  const algo = document.getElementById('anoAlgoSelect').value;
+  const r = await api(`/api/anomaly/outliers?date=${d}&algo=${algo}`);
+  if (seq !== anoSeq) return;
+  document.getElementById('anoSummary').textContent =
+    `扫描 ${r.scannedOrders} 笔母单 · 检出 ${r.outlierCount} 笔离群`;
+  document.getElementById('anoBody').innerHTML = r.outliers.length ? r.outliers.map(o => `
+    <tr>
+      <td>${o.orderId}</td><td>${o.algoInstance}</td><td>${o.symbol}</td><td>${o.side}</td>
+      <td>${o.vwapPerfBps == null ? '-' : (+o.vwapPerfBps).toFixed(2)}</td>
+      <td>${o.cancelRatio == null ? '-' : (+o.cancelRatio * 100).toFixed(0) + '%'}</td>
+      <td style="color:var(--danger);font-weight:600">${o.mainDimension}</td>
+      <td>${Math.abs(o.mainDimensionZ).toFixed(1)}×</td>
+      <td style="font-weight:700">${o.anomalyScore}</td>
+      <td><span class="badge badge-${o.severity}">${o.severity}</span></td>
+      <td style="color:var(--text-dim);font-size:12px">${o.explanation}</td>
+    </tr>`).join('') :
+    '<tr><td colspan="11" style="text-align:center;color:var(--text-dim);padding:24px">该日期暂无评价数据或未检出离群母单</td></tr>';
+}
+
+(async function () {
+  const instances = await api('/api/ai/instances');
+  const options = instances.map(i => `<option value="${i.algo_instance}">${i.algo_instance}</option>`).join('');
+  document.getElementById('aiAlgoSelect').innerHTML = options;
+  document.getElementById('anoAlgoSelect').innerHTML = '<option value="">全部算法</option>' + options;
+  document.getElementById('aiReportBtn').addEventListener('click', loadReport);
+  document.getElementById('askBtn').addEventListener('click', askQuestion);
+  document.getElementById('anoBtn').addEventListener('click', detectAnomaly);
+  document.getElementById('questionInput').addEventListener('keyup', e => { if (e.key === 'Enter') askQuestion(); });
+
+  const ex = await api('/api/ai/nlquery/examples');
+  document.getElementById('exampleChips').innerHTML =
+    ex.examples.map(q => `<span class="chip" onclick="document.getElementById('questionInput').value='${q}';askQuestion()">${q}</span>`).join('');
+
+  if (instances.length) { await loadReport(); await detectAnomaly(); }
+})();
+</script>
+</body>
+</html>

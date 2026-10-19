@@ -1,0 +1,21 @@
+# 构建产物
+target/
+*.class
+*.jar
+
+# IDE
+.vscode/
+.idea/
+*.iml
+.settings/
+.classpath
+.project
+
+# 日志与临时文件
+*.log
+hs_err_pid*
+nohup.out
+
+# 系统
+.DS_Store
+Thumbs.db

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日内监控 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=3">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">日内监控驾驶舱</div>
+      <div style="color:var(--text-dim);font-size:13px">WebSocket 实时推送 · 滑动窗口绩效 · 撤单率告警</div>
+    </div>
+    <div class="flex items-center gap-2" style="font-size:13px;color:var(--text-dim)">
+      <span id="wsStatus" style="color:var(--warn)">● 连接中…</span>
+      <span id="clock"></span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="glass-panel p-4 rise-in col-span-1 md:col-span-2">
+      <div class="section-title mb-2">实时绩效走势（VWAP 偏离 bps，按算法实例）</div>
+      <div id="rtChart" style="height:340px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.1s">
+      <div class="section-title mb-2">进行中母单</div>
+      <div id="activeGauge" style="height:340px"></div>
+    </div>
+  </div>
+
+  <div class="glass-panel p-4 rise-in" style="animation-delay:.2s">
+    <div class="section-title mb-3">实时告警（撤单率 &gt; 25%）</div>
+    <div id="alertList" style="max-height:220px;overflow-y:auto">
+      <div style="color:var(--text-dim);font-size:13px">暂无告警</div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=3"></script>
+<script>
+renderNav('intraday');
+const seriesMap = {};   // algo → [{time, bps, cancelRatio, active}]
+const rtChart = echarts.init(document.getElementById('rtChart'));
+const gauge = echarts.init(document.getElementById('activeGauge'));
+
+function renderChart() {
+  const algos = Object.keys(seriesMap);
+  rtChart.setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: { trigger: 'axis' },
+    legend: { top: 0, textStyle: { color: '#8B9BB8' }, data: algos },
+    xAxis: { type: 'category', data: [...new Set(algos.flatMap(a => seriesMap[a].map(p => p.time)))].sort(),
+      axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    series: algos.map(a => ({
+      name: a, type: 'line', smooth: true, showSymbol: false,
+      data: seriesMap[a].map(p => [p.time, p.bps]),
+      lineStyle: { width: 2 },
+    })),
+  }, { notMerge: true });
+}
+
+function renderGauge() {
+  const total = Object.values(seriesMap).reduce((s, arr) => arr.length ? s + arr[arr.length - 1].active : s, 0);
+  gauge.setOption({
+    series: [{
+      type: 'gauge', min: 0, max: 400, progress: { show: true, width: 14,
+        itemStyle: { color: '#22D3EE' } },
+      axisLine: { lineStyle: { width: 14, color: [[1, 'rgba(139,155,184,.15)']] } },
+      axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false },
+      pointer: { show: false },
+      detail: { valueAnimation: true, fontSize: 34, color: '#22D3EE',
+        fontFamily: 'Consolas, monospace', offsetCenter: [0, '0%'], formatter: '{value}' },
+      title: { show: true, offsetCenter: [0, '35%'], color: '#8B9BB8', fontSize: 13 },
+      data: [{ value: total, name: '进行中母单（全部算法）' }],
+    }],
+  });
+}
+
+function addAlert(msg) {
+  const list = document.getElementById('alertList');
+  if (list.firstElementChild && list.firstElementChild.textContent === '暂无告警') list.innerHTML = '';
+  const item = document.createElement('div');
+  item.className = 'flex items-center gap-2 py-1';
+  item.innerHTML = `<span class="alert-dot"></span>
+    <span style="color:var(--danger)">${msg.algo}</span>
+    <span style="color:var(--text-dim);font-size:12px">${msg.windowTime} · ${msg.message}（撤单率 ${(msg.cancelRatio * 100).toFixed(1)}%）</span>`;
+  list.prepend(item);
+}
+
+const ws = new WebSocket('ws://' + location.host + '/ws/intraday');
+ws.onopen = () => { document.getElementById('wsStatus').textContent = '● 实时连接中'; document.getElementById('wsStatus').style.color = 'var(--ok)'; };
+ws.onclose = () => { document.getElementById('wsStatus').textContent = '● 连接断开'; document.getElementById('wsStatus').style.color = 'var(--danger)'; };
+ws.onmessage = (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.type === 'metric') {
+    (seriesMap[msg.algo] = seriesMap[msg.algo] || []).push({
+      time: msg.windowTime.substring(11, 16), bps: msg.runningVwapBps, active: msg.activeOrders,
+    });
+    renderChart(); renderGauge();
+  } else if (msg.type === 'alert') {
+    addAlert(msg);
+  }
+};
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+</script>
+</body>
+</html>

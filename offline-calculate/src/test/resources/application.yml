@@ -1,0 +1,32 @@
+spring:
+  main:
+    banner-mode: "off"
+  datasource:
+    url: jdbc:h2:mem:offlinetest;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+    hikari:
+      maximum-pool-size: 16
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:test-schema.sql
+
+algo:
+  offline:
+    heartbeat-interval-ms: 200
+    heartbeat-timeout-ms: 2000
+    reap-interval-ms: 500
+    max-retry: 3
+
+logging:
+  level:
+    com.algoeval: info
+
+# 单测上下文：显式关闭真实中间件集成（锁/选主退化本地实现，Seata 客户端不激活）
+seata:
+  enabled: false
+algo:
+  redis:
+    enabled: false

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>T0 概览 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="page-title mb-1 rise-in">T0 客户概览</div>
+  <div style="color:var(--text-dim);font-size:13px" class="mb-5">交易概览 · 收益概览 · 风险收益指标（T0 双轨评价）</div>
+
+  <div class="glass-panel p-4 mb-4 rise-in" style="animation-delay:.05s">
+    <div class="section-title mb-3">交易概览</div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3" id="tradeCards"></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.1s">
+      <div class="section-title mb-3">收益概览</div>
+      <div class="grid grid-cols-2 gap-3" id="profitCards"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.15s">
+      <div class="section-title mb-3">风险收益指标</div>
+      <div class="grid grid-cols-2 gap-3" id="riskCards"></div>
+    </div>
+  </div>
+
+  <div class="glass-panel p-4 mb-4 rise-in" style="animation-delay:.2s">
+    <div class="section-title mb-2">T0 每日净收益</div>
+    <div id="trendChart" style="height:280px"></div>
+  </div>
+
+  <div class="glass-panel p-5 rise-in" style="animation-delay:.25s">
+    <div class="section-title mb-3">自动综述</div>
+    <div class="narrative-text" id="narrative"></div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('t0-overview');
+const date = todayStr();
+
+function typewriter(el, text) {
+  el.textContent = '';
+  let i = 0;
+  (function tick() {
+    if (i <= text.length) { el.textContent = text.slice(0, i++); setTimeout(tick, 14); }
+  })();
+}
+
+(async function () {
+  const [ov, dayDetail] = await Promise.all([
+    api('/api/stat/t0/overview?date=' + date),
+    api('/api/stat/t0/day-detail'),
+  ]);
+  const fmt = (v, d = 2) => v == null ? '-' : (+v).toLocaleString(undefined, { maximumFractionDigits: d });
+  const pct = v => v == null ? '-' : ((+v) * 100).toFixed(2) + '%';
+  const card = (label, val) => `<div><div class="kpi-label">${label}</div>
+    <div style="font-size:16px;font-weight:700;color:var(--primary);margin-top:2px">${val}</div></div>`;
+
+  const t = ov.tradeOverview || {};
+  document.getElementById('tradeCards').innerHTML = [
+    card('总成交金额(元)', fmt(t.totalTurnover)), card('成交数量(股)', fmt(t.filledQty, 0)),
+    card('开仓金额(元)', fmt(t.openAmount)), card('子单委托笔数', fmt(t.childOrders, 0)),
+    card('任务金额(元)', fmt(t.taskAmount)), card('母单委托笔数', fmt(t.parentOrders, 0)),
+    card('标的数量', fmt(t.symbolCount, 0)), card('交易账户总数', fmt(t.accountTotal, 0)),
+    card('未平仓笔数', fmt(t.unclosedCount, 0)), card('撤单率', pct(t.cancelRatio)),
+    card('废单率', pct(t.rejectRatio)), card('利用率', '-'),
+  ].join('');
+
+  const p = ov.profitOverview || {};
+  document.getElementById('profitCards').innerHTML = [
+    card('净收益(元)', fmt(p.netProfit)), card('开仓金额(元)', fmt(p.openAmount)),
+    card('累计收益率(%)', fmt(p.accumulatedReturnPct)), card('日均收益', '-'),
+  ].join('');
+
+  const r = ov.riskMetrics || {};
+  document.getElementById('riskCards').innerHTML = [
+    card('日收益率(bps)', fmt(r.dayReturnBps)), card('夏普比率', fmt(r.sharpe)),
+    card('最大回撤(bps)', fmt(r.maxDrawdownBps)), card('卡玛比率', fmt(r.calmar)),
+  ].join('');
+
+  const rows = dayDetail || [];
+  echarts.init(document.getElementById('trendChart')).setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: { trigger: 'axis' }, legend: { top: 0, textStyle: { color: '#8B9BB8' } },
+    xAxis: { type: 'category', data: rows.map(x => x.trade_date), axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    series: [
+      { name: '净收益(元)', type: 'bar', data: rows.map(x => +(+x.net_profit).toFixed(2)),
+        itemStyle: { color: '#34D399', borderRadius: [6, 6, 0, 0] }, barWidth: 30 },
+      { name: '日收益率(bps)', type: 'line', smooth: true, data: rows.map(x => +(+x.day_return_bps).toFixed(2)),
+        itemStyle: { color: '#FBBF24' } },
+    ],
+  });
+
+  typewriter(document.getElementById('narrative'), ov.narrative || '暂无 T0 数据。');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>算法母单指标 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">算法母单指标</div>
+      <div style="color:var(--text-dim);font-size:13px">母单级指标明细（7 种绩效基准 BPS 口径 + PNL + 执行质量族）</div>
+    </div>
+    <div class="flex gap-2 items-center">
+      <select id="algoSelect"></select>
+      <button id="queryBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(34,211,238,.15);color:var(--primary);border:1px solid rgba(34,211,238,.4)">查询</button>
+    </div>
+  </div>
+
+  <div class="glass-panel p-4 rise-in" style="animation-delay:.08s">
+    <div style="max-height:600px;overflow:auto">
+      <table style="font-size:12px">
+        <thead><tr><th>母单号</th><th>算法实例</th><th>类型</th><th>标的</th><th>客户</th><th>方向</th>
+          <th>任务金额(万)</th><th>VWAP绩效</th><th>VWAP(委托)</th><th>TWAP绩效</th><th>TWAP(委托)</th>
+          <th>Arrival</th><th>开盘</th><th>收盘</th><th>VWAP绩效PNL</th><th>撤单率</th><th>废单率</th>
+          <th>完成率</th><th>市占率</th><th>执行时长(分)</th></tr></thead>
+        <tbody id="metricBody"></tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between mt-3">
+      <div style="color:var(--text-dim);font-size:12px" id="totalNote"></div>
+      <div class="flex gap-2">
+        <button id="prevBtn" class="px-3 py-1 rounded-lg text-sm" style="border:1px solid rgba(139,155,184,.35);color:var(--text-dim)">上一页</button>
+        <span id="pageNote" style="color:var(--text-dim);font-size:12px;align-self:center"></span>
+        <button id="nextBtn" class="px-3 py-1 rounded-lg text-sm" style="border:1px solid rgba(139,155,184,.35);color:var(--text-dim)">下一页</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('parent-metrics');
+const date = todayStr();
+let page = 1;
+const size = 50;
+let total = 0;
+const bps = v => v == null ? '-' : (+v).toFixed(2);
+const pct = v => v == null ? '-' : ((+v) * 100).toFixed(1) + '%';
+
+async function load() {
+  const algo = document.getElementById('algoSelect').value;
+  const data = await api('/api/stat/parent-metrics?date=' + date + '&page=' + page + '&size=' + size
+      + (algo ? '&algo=' + algo : ''));
+  total = data.total;
+  document.getElementById('totalNote').textContent = '共 ' + total + ' 条母单指标';
+  document.getElementById('pageNote').textContent = '第 ' + data.page + ' / ' + Math.max(1, Math.ceil(total / size)) + ' 页';
+  document.getElementById('metricBody').innerHTML = (data.rows || []).map(r => `
+    <tr class="rank-row"><td>${r.order_id}</td><td>${r.algo_instance}</td><td>${r.algo_type}</td>
+      <td>${r.symbol}</td><td>${r.client_name}</td><td>${r.side}</td>
+      <td>${(+r.task_amount / 1e4).toFixed(1)}</td>
+      <td>${bps(r.vwap_perf_bps)}</td><td>${bps(r.vwap_ot_perf_bps)}</td>
+      <td>${bps(r.twap_perf_bps)}</td><td>${bps(r.twap_ot_perf_bps)}</td>
+      <td>${bps(r.arrival_perf_bps)}</td><td>${bps(r.open_perf_bps)}</td><td>${bps(r.close_perf_bps)}</td>
+      <td>${r.vwap_perf_pnl == null ? '-' : (+r.vwap_perf_pnl).toFixed(0)}</td>
+      <td>${pct(r.cancel_ratio)}</td><td>${pct(r.reject_ratio)}</td><td>${pct(r.fill_ratio)}</td>
+      <td>${pct(r.participation)}</td><td>${bps(r.exec_minutes)}</td></tr>`).join('');
+}
+document.getElementById('prevBtn').addEventListener('click', () => { if (page > 1) { page--; load(); } });
+document.getElementById('nextBtn').addEventListener('click', () => { if (page * size < total) { page++; load(); } });
+document.getElementById('queryBtn').addEventListener('click', () => { page = 1; load(); });
+
+(async function () {
+  const scores = (await api('/api/stat/score?date=' + date)).instances || [];
+  document.getElementById('algoSelect').innerHTML =
+    '<option value="">全部算法</option>' +
+    scores.map(s => `<option value="${s.algo_instance}">${s.algo_instance}</option>`).join('');
+  load();
+})();
+</script>
+</body>
+</html>

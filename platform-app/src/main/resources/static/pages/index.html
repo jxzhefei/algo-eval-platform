@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>总览 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">总览</div>
+      <div style="color:var(--text-dim);font-size:13px" id="dateLabel"></div>
+    </div>
+    <div style="color:var(--text-dim);font-size:12px">算法 / T0 双轨执行质量评价</div>
+  </div>
+
+  <!-- KPI 指标卡带（对齐真实总览页：成交金额/标的总数/母单委托笔数/算法总数/算法商总数/客户总数/账户总数） -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-5" id="kpiRow"></div>
+
+  <!-- 算法总览 / T0 总览 双卡片 -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.08s">
+      <div class="section-title mb-3">算法总览（非 T0）</div>
+      <div class="grid grid-cols-3 gap-3" id="algoCard"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.14s">
+      <div class="section-title mb-3">T0 总览</div>
+      <div class="grid grid-cols-3 gap-3" id="t0Card"></div>
+    </div>
+  </div>
+
+  <!-- 三维度绩效排名（算法实例 / 机构名称 / 证券名称） -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.2s">
+      <div class="section-title mb-3">按算法实例（VWAP 绩效 bps）</div>
+      <table><thead><tr><th>#</th><th>实例</th><th>母单</th><th>VWAP bps</th></tr></thead>
+        <tbody id="rankAlgo"></tbody></table>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.26s">
+      <div class="section-title mb-3">按机构名称（VWAP 绩效 bps）</div>
+      <table><thead><tr><th>#</th><th>机构</th><th>母单</th><th>VWAP bps</th></tr></thead>
+        <tbody id="rankClient"></tbody></table>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.32s">
+      <div class="section-title mb-3">按证券名称（VWAP 绩效 bps）</div>
+      <table><thead><tr><th>#</th><th>证券</th><th>母单</th><th>VWAP bps</th></tr></thead>
+        <tbody id="rankSymbol"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('index');
+const date = todayStr();
+document.getElementById('dateLabel').textContent = '交易日 ' + date;
+
+const fmt = (v, d = 0) => v == null ? '-' : (+v).toLocaleString(undefined, { maximumFractionDigits: d });
+
+(async function () {
+  const ov = await api('/api/stat/overview?date=' + date);
+
+  // KPI 指标卡
+  const cards = ov.cards;
+  const kpis = [
+    ['成交金额(万)', fmt(+cards.turnover / 1e4)],
+    ['标的总数', fmt(cards.symbolCount)],
+    ['母单委托笔数', fmt(cards.parentOrders)],
+    ['算法总数', fmt(cards.algoCount)],
+    ['算法商总数', fmt(cards.vendorCount)],
+    ['客户总数', fmt(cards.clientCount)],
+    ['账户总数', fmt(cards.accountCount)],
+  ];
+  document.getElementById('kpiRow').innerHTML = kpis.map(([label, val], i) => `
+    <div class="glass-panel p-4 rise-in" style="animation-delay:${i * 0.05}s">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-number mt-1">${val}</div>
+    </div>`).join('');
+
+  const pct = v => v == null ? '-' : ((+v) * 100).toFixed(2) + '%';
+  const cell = (label, val) => `<div><div class="kpi-label">${label}</div>
+    <div style="font-size:17px;font-weight:700;color:var(--primary);margin-top:2px">${val}</div></div>`;
+
+  const a = ov.algoOverview || {};
+  document.getElementById('algoCard').innerHTML = [
+    cell('任务金额(万)', fmt(+a.task_amount / 1e4)),
+    cell('母单委托笔数', fmt(a.parent_count)),
+    cell('子单委托笔数', fmt(a.child_count)),
+    cell('任务金额完成率', pct(a.taskFillRatio)),
+    cell('TWAP绩效(bps)', fmt(a.twap_bps, 2)),
+    cell('VWAP绩效(bps)', fmt(a.vwap_bps, 2)),
+  ].join('');
+
+  const t = ov.t0Overview || {};
+  document.getElementById('t0Card').innerHTML = [
+    cell('任务金额(万)', fmt(+t.task_amount / 1e4)),
+    cell('开仓金额(万)', fmt(+t.open_amount / 1e4)),
+    cell('母单委托笔数', fmt(t.parent_count)),
+    cell('任务金额开仓率', pct(t.openRatio)),
+    cell('净收益(元)', fmt(t.net_profit, 2)),
+    cell('日收益率(bps)', fmt(t.day_return_bps, 2)),
+  ].join('');
+
+  // 三维度排名
+  const renderRank = (id, rows, labelKey) => {
+    document.getElementById(id).innerHTML = (rows || []).slice(0, 8).map((r, i) => `
+      <tr class="rank-row ${i < 3 ? 'rank-' + (i + 1) : ''}">
+        <td>${i + 1}</td><td>${r[labelKey] ?? r.name}</td><td>${fmt(r.cnt)}</td>
+        <td>${r.vwap_bps == null ? '-' : (+r.vwap_bps).toFixed(2)}</td></tr>`).join('');
+  };
+  renderRank('rankAlgo', ov.rankByAlgo, 'name');
+  renderRank('rankClient', ov.rankByClient, 'name');
+  renderRank('rankSymbol', ov.rankBySymbol, 'name');
+})();
+</script>
+</body>
+</html>

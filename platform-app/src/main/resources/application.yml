@@ -1,0 +1,130 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: algo-eval-platform
+  datasource:
+    url: jdbc:mysql://localhost:3306/algodb?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&connectionCollation=utf8mb4_unicode_ci
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: algoeval
+  # 表结构由 infra-core 统一建（ShardingSphere 窗口预建 + 单表直建），关闭 spring.sql.init
+  sql:
+    init:
+      mode: never
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        retries: 3
+    consumer:
+      # 真实系统消费参数还原（ata-data-storer application.yml）：
+      # 攒批拉取（64KB/500ms）+ 手动提交 + ErrorHandlingDeserializer 防脏消息毒化消费组
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      auto-offset-reset: latest
+      enable-auto-commit: false
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.ByteArrayDeserializer
+        fetch.min.bytes: 65536
+        fetch.max.wait.ms: 500
+        max.poll.records: 1000
+        receive.buffer.bytes: 8388608
+        max.partition.fetch.bytes: 67108864
+        fetch.max.bytes: 209715200
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.RoundRobinAssignor
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  # Nacos 注册 + 配置中心（§13.6：多客户差异化配置 / 灰度 / 热更新）
+  # 注册失败与配置服务不可达均后台重试（不阻断启动）——注册中心短暂不可用是生产可容忍事件
+  cloud:
+    nacos:
+      server-addr: localhost:8848
+      discovery:
+        enabled: true
+        service: algo-eval-platform
+        fail-fast: false
+      config:
+        enabled: true
+        server-addr: localhost:8848
+        import-check:
+          enabled: false
+
+# Seata AT（§13.5：可选档位——默认本地事务；旗舰档跨 schema 批次原子提交时置 true）
+# 注意：ShardingSphereDataSource 为 final 类，Seata 的 CGLIB 自动代理无法子类化——
+# 启用时由 offline-calculate 的组合式 DataSourceProxy 手工包装（enable-auto-data-source-proxy 必须为 false）
+seata:
+  enabled: false
+  enable-auto-data-source-proxy: false
+  application-id: algo-eval-platform
+  tx-service-group: algo_eval_tx_group
+  service:
+    vgroup-mapping:
+      algo_eval_tx_group: default
+    grouplist:
+      default: 127.0.0.1:8091
+  data-source-proxy-mode: AT
+
+algo:
+  kafka:
+    topic:
+      market: market-tick
+      trade: trade-order
+  sharding:
+    back-days: 7            # ShardingSphere 交易日窗口（回看）
+    forward-days: 30        # 预建未来物理表窗口
+  redis:
+    enabled: true           # Redisson（汇总锁 + 采集选主）
+  hq:
+    endpoint: tcp://127.0.0.1:5570   # 行情前置 PUB 端点（JeroMQ）
+    source:
+      plugin: classpath     # 或 file:/path/to/xxx-source.jar（外部插件）
+      impl: com.algoeval.collector.hq.source.jeromq.JeromqHqSource
+  sim:
+    symbols: 100            # 标的数量
+    orders: 3000            # 母单数量（演示规模；真实头部客户日 30 万母单）
+    seed: 42                # 固定种子，可复现
+    millis-per-minute: 1000 # 回放加速：1 真实秒 = 1 市场分钟（置 1000*60=实时回放）
+    shards: 32              # 离线计算逻辑分片数
+    nodes: 3                # 离线计算节点数（单 JVM 多线程模拟；多进程部署见 README）
+    ingest-url: http://localhost:8080   # 交易接入层端点（模拟终端经 REST 上报）
+    thirdparty:
+      enabled: false        # 第三方算法商通道（atx-third-guolian 语义，异构报文归一化演示）
+  offline:
+    heartbeat-interval-ms: 10000
+    heartbeat-timeout-ms: 60000
+    max-retry: 3
+  cache:
+    l1-ttl-seconds: 60      # Caffeine 本地缓存 TTL
+    l2-ttl-seconds: 300     # Redis 共享缓存 TTL
+    redis:
+      enabled: true
+  ck:
+    enabled: true           # ClickHouse 分析库（行情宽表 + 指标宽表 + 日同步 + 对账）
+    url: jdbc:clickhouse://localhost:8123/default
+    username: default
+    password: algoeval
+    sync:
+      auto: true
+  recommend:
+    lookback-days: 90        # 能力画像矩阵回看窗口
+  ai:
+    llm:
+      base-url: ""          # 私有化 LLM 端点（OpenAI 兼容，如 http://内网IP:8000/v1）；留空 = 本地受限生成
+      model: qwen2.5-7b-instruct
+      api-key: ""
+      timeout-ms: 15000
+
+logging:
+  level:
+    org.apache.kafka: warn
+    org.springframework.kafka: info
+    com.algoeval: info
+    org.apache.shardingsphere: warn

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package quote;
+
+option java_package = "com.algoeval.source.sdk.proto";
+option java_outer_classname = "QuoteProtos";
+
+// 单条行情快照（对齐真实系统 Quote.QuoteItem：symbol/time/tradeDate 等）
+message QuoteItem {
+  string symbol = 1;            // 标的代码
+  int64 tick_time_millis = 2;   // 行情时间（epoch millis）
+  string trade_date = 3;        // 交易日 yyyy-MM-dd（分表路由依据）
+  string price = 4;             // 最新价（字符串保精度，金融数值不用浮点）
+  int64 volume = 5;             // 该 tick 成交量（股）
+  string turnover = 6;          // 该 tick 成交额（元）
+}
+
+// 批量行情容器（对齐真实系统 Quote.QuoteList：Disruptor 攒批后按交易日分组发布）
+message QuoteList {
+  int32 batch_seq = 1;          // 批次序号（采集侧监控用）
+  int32 source_partition = 2;   // 采集源分片序号
+  repeated QuoteItem items = 3;
+}

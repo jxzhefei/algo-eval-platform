@@ -1,0 +1,225 @@
+/* Tailwind CSS（本地化，避免 CDN 不可达时样式全崩） */
+@import url('/lib/tailwind.min.css');
+
+/* ═══ 设计令牌：深色金融科技风 ═══ */
+:root {
+  --bg-deep: #0B1220;
+  --bg-panel: #111A2E;
+  --bg-panel-light: #1A2440;
+  --primary: #22D3EE;
+  --accent-blue: #3B82F6;
+  --accent-purple: #A78BFA;
+  --text-main: #E5EAF5;
+  --text-dim: #8B9BB8;
+  --ok: #34D399;
+  --danger: #F87171;
+  --warn: #FBBF24;
+}
+
+html, body {
+  background: var(--bg-deep);
+  color: var(--text-main);
+  font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* 背景辉光 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0%, rgba(34, 211, 238, 0.08), transparent),
+    radial-gradient(ellipse 50% 35% at 85% 100%, rgba(167, 139, 250, 0.07), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 玻璃拟态面板 */
+.glass-panel {
+  background: linear-gradient(145deg, rgba(26, 36, 64, 0.75), rgba(17, 26, 46, 0.85));
+  border: 1px solid rgba(139, 155, 184, 0.14);
+  border-radius: 14px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+.glass-panel:hover {
+  transform: translateY(-3px);
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow: 0 10px 32px rgba(34, 211, 238, 0.12);
+}
+
+/* KPI 等宽大号数字——行情终端感 */
+.kpi-number {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.45);
+  letter-spacing: 0.5px;
+}
+.kpi-label {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+}
+
+/* ═══ 左侧导航栏 ═══ */
+:root { --side-nav-w: 220px; }
+
+.side-nav {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--side-nav-w);
+  background: rgba(11, 18, 32, 0.92);
+  backdrop-filter: blur(14px);
+  border-right: 1px solid rgba(139, 155, 184, 0.12);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 14px 14px;
+  box-sizing: border-box;
+}
+.side-logo {
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 1px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+.side-subtitle {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: .5px;
+  padding: 5px 10px 16px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(139, 155, 184, 0.10);
+  white-space: nowrap;
+}
+.side-menu { display: flex; flex-direction: column; gap: 4px; }
+.side-footer {
+  margin-top: auto;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 0 10px 4px;
+  white-space: nowrap;
+}
+
+.nav-link {
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all .2s ease;
+}
+.nav-icon { width: 18px; text-align: center; font-size: 15px; }
+.nav-link:hover { color: var(--text-main); background: rgba(34, 211, 238, 0.08); }
+.nav-link.active {
+  color: var(--primary);
+  background: rgba(34, 211, 238, 0.12);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+/* 内容区让出侧边栏宽度（width:auto 防止 100%+margin 叠加溢出） */
+body.has-sidenav > div:not(.side-nav) { margin-left: var(--side-nav-w); width: auto; }
+
+/* 窄屏：侧边栏收窄为图标栏，内容自适应 */
+@media (max-width: 1023px) {
+  :root { --side-nav-w: 60px; }
+  .side-logo { padding: 0; text-align: center; }
+  .side-logo .logo-text,
+  .side-subtitle,
+  .side-footer,
+  .nav-link .nav-label { display: none; }
+  .side-subtitle { border-bottom: none; margin-bottom: 10px; padding: 0; }
+  .side-menu .nav-link { justify-content: center; padding: 12px 0; }
+}
+
+/* 排名表前三名高亮 */
+.rank-row { border-bottom: 1px solid rgba(139, 155, 184, 0.08); transition: background .2s; }
+.rank-row:hover { background: rgba(34, 211, 238, 0.05); }
+.rank-1 td { color: #FFD666; font-weight: 600; }
+.rank-2 td { color: #C0C8D8; font-weight: 600; }
+.rank-3 td { color: #D08A4E; font-weight: 600; }
+
+/* 告警呼吸红点 */
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.55); }
+  50% { box-shadow: 0 0 0 9px rgba(248, 113, 113, 0); }
+}
+.alert-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--danger);
+  animation: pulse-red 1.6s infinite;
+  display: inline-block;
+}
+
+/* 卡片入场动画 */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in .5s ease both; }
+
+/* 综述打字机段落 */
+.narrative-text {
+  line-height: 1.9;
+  color: var(--text-main);
+  border-left: 3px solid var(--primary);
+  padding-left: 1rem;
+}
+
+/* 推荐理由/建议列表 */
+.reason-list { list-style: none; margin: 0; padding: 0; }
+.reason-list li {
+  position: relative;
+  padding: 0.45rem 0 0.45rem 1.4rem;
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 1.7;
+  border-bottom: 1px dashed rgba(139, 155, 184, 0.12);
+}
+.reason-list li::before {
+  content: '◈';
+  position: absolute;
+  left: 0.2rem;
+  color: var(--primary);
+}
+
+/* 数字输入框（路由表单） */
+input[type="number"], input[type="text"] {
+  background: var(--bg-panel-light);
+  color: var(--text-main);
+  border: 1px solid rgba(139, 155, 184, 0.25);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+input[type="number"]:focus, input[type="text"]:focus { border-color: var(--primary); }
+
+/* 选择器 */
+select, input[type="date"] {
+  background: var(--bg-panel-light);
+  color: var(--text-main);
+  border: 1px solid rgba(139, 155, 184, 0.25);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-size: 14px;
+  outline: none;
+}
+select:focus, input[type="date"]:focus { border-color: var(--primary); }
+
+table { width: 100%; font-size: 13.5px; }
+th { color: var(--text-dim); font-weight: 500; text-align: left; padding: 0.55rem 0.75rem; }
+td { padding: 0.55rem 0.75rem; color: var(--text-main); }
+
+.page-title { font-size: 24px; font-weight: 600; }
+.section-title { font-size: 16px; font-weight: 500; color: var(--text-main); }

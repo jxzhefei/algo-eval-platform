@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>算法概览 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">算法概览</div>
+      <div style="color:var(--text-dim);font-size:13px">算法实例概览 / 算法商概览（TWAP·VWAP 绩效 PNL+BPS 双口径）</div>
+    </div>
+    <div class="flex gap-2 items-center">
+      <input type="date" id="fromDate"><span style="color:var(--text-dim)">~</span><input type="date" id="toDate">
+      <button id="queryBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(34,211,238,.15);color:var(--primary);border:1px solid rgba(34,211,238,.4)">查询</button>
+      <button id="exportBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(167,139,250,.15);color:#A78BFA;border:1px solid rgba(167,139,250,.4)">导出数据</button>
+    </div>
+  </div>
+
+  <div class="glass-panel p-2 mb-4 rise-in inline-flex gap-1">
+    <button class="tab-btn px-4 py-1 rounded-lg text-sm" data-tab="instance">算法实例概览</button>
+    <button class="tab-btn px-4 py-1 rounded-lg text-sm" data-tab="vendor">算法商概览</button>
+  </div>
+
+  <div class="glass-panel p-4 rise-in" style="animation-delay:.1s">
+    <div style="max-height:560px;overflow:auto">
+      <table id="mainTable">
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div style="color:var(--text-dim);font-size:12px;margin-top:6px" id="tableNote"></div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('algo-overview');
+const date = todayStr();
+document.getElementById('toDate').value = date;
+const from = new Date(Date.now() - 90 * 864e5);
+document.getElementById('fromDate').value = from.toISOString().slice(0, 10);
+let tab = 'instance';
+let currentRows = [];
+
+const fmt = (v, d = 2) => v == null ? '-' : (+v).toLocaleString(undefined, { maximumFractionDigits: d });
+const pct = v => v == null ? '-' : ((+v) * 100).toFixed(2) + '%';
+
+async function load() {
+  const f = document.getElementById('fromDate').value, t = document.getElementById('toDate').value;
+  const url = tab === 'instance' ? '/api/stat/algo-overview?from=' + f + '&to=' + t
+                                 : '/api/stat/vendor-overview?from=' + f + '&to=' + t;
+  currentRows = await api(url);
+  if (tab === 'instance') {
+    document.getElementById('thead').innerHTML = `<tr><th>算法实例</th><th>算法供应商</th><th>成交金额(万)</th>
+      <th>日均成交金额(万)</th><th>母单委托笔数</th><th>撤单率</th><th>废单率</th><th>任务金额完成率</th>
+      <th>TWAP绩效PNL</th><th>TWAP绩效BPS</th><th>VWAP绩效PNL</th><th>VWAP绩效BPS</th><th>客户数量</th><th>操作</th></tr>`;
+    document.getElementById('tbody').innerHTML = currentRows.map(r => `
+      <tr class="rank-row"><td>${r.algo_instance}</td><td>${r.algo_vendor}</td>
+        <td>${fmt(r.turnover / 1e4)}</td><td>${fmt(r.daily_turnover / 1e4)}</td><td>${fmt(r.parent_orders, 0)}</td>
+        <td>${pct(r.cancel_ratio)}</td><td>${pct(r.reject_ratio)}</td><td>${pct(r.fill_ratio)}</td>
+        <td>${fmt(r.twap_pnl)}</td><td>${fmt(r.twap_bps)}</td>
+        <td>${fmt(r.vwap_pnl)}</td><td>${fmt(r.vwap_bps)}</td><td>${fmt(r.client_count, 0)}</td>
+        <td><a href="/pages/portrait.html" style="color:var(--primary)">算法画像</a></td></tr>`).join('');
+    document.getElementById('tableNote').textContent = '共 ' + currentRows.length + ' 条';
+  } else {
+    document.getElementById('thead').innerHTML = `<tr><th>算法供应商</th><th>算法实例数</th><th>成交金额(万)</th>
+      <th>母单委托笔数</th><th>客户数量</th><th>撤单率</th><th>完成率</th><th>TWAP绩效BPS</th>
+      <th>VWAP绩效BPS</th><th>平均综合得分</th></tr>`;
+    document.getElementById('tbody').innerHTML = currentRows.map(r => `
+      <tr class="rank-row"><td>${r.algo_vendor}</td><td>${fmt(r.algo_count, 0)}</td>
+        <td>${fmt(r.turnover / 1e4)}</td><td>${fmt(r.parent_orders, 0)}</td><td>${fmt(r.client_count, 0)}</td>
+        <td>${pct(r.cancel_ratio)}</td><td>${pct(r.fill_ratio)}</td>
+        <td>${fmt(r.twap_bps)}</td><td>${fmt(r.vwap_bps)}</td>
+        <td style="color:var(--primary);font-weight:700">${fmt(r.avg_total_score)}</td></tr>`).join('');
+    document.getElementById('tableNote').textContent = '共 ' + currentRows.length + ' 条';
+  }
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => {
+  tab = btn.dataset.tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.style.background = '');
+  btn.style.background = 'rgba(34,211,238,.15)';
+  load();
+}));
+document.querySelector('.tab-btn').style.background = 'rgba(34,211,238,.15)';
+document.getElementById('queryBtn').addEventListener('click', load);
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const rows = [[...document.querySelectorAll('#thead th')].map(th => th.innerText).join(',')];
+  document.querySelectorAll('#tbody tr').forEach(tr =>
+    rows.push([...tr.children].map(td => '"' + td.innerText + '"').join(',')));
+  const blob = new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'algo-overview.csv';
+  a.click();
+});
+load();
+</script>
+</body>
+</html>

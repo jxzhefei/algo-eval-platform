@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>算法对比 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=3">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="page-title mb-1 rise-in">算法对比</div>
+  <div style="color:var(--text-dim);font-size:13px" class="mb-5">五维评分雷达 · 绩效走势 · 指标明细对照</div>
+
+  <div class="glass-panel p-4 mb-4 rise-in">
+    <span class="section-title mr-3">选择算法实例</span>
+    <span id="algoChecks" class="inline-flex gap-3"></span>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.1s">
+      <div class="section-title mb-2">五维评分雷达</div>
+      <div id="radarChart" style="height:360px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.2s">
+      <div class="section-title mb-2">绩效走势（VWAP / TWAP bps）</div>
+      <div id="trendChart" style="height:360px"></div>
+    </div>
+  </div>
+
+  <div class="glass-panel p-4 mt-4 rise-in" style="animation-delay:.3s">
+    <div class="section-title mb-3">指标明细对照</div>
+    <table>
+      <thead><tr><th>算法实例</th><th>绩效</th><th>完成度</th><th>稳定性</th><th>风险</th><th>市场冲击</th><th>综合得分</th></tr></thead>
+      <tbody id="scoreBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('compare');
+const date = todayStr();
+const DIMS = ['绩效', '完成度', '稳定性', '风险', '市场冲击'];
+const FIELDS = ['perf_score', 'fill_score', 'stability_score', 'risk_score', 'impact_score'];
+let scores = [];
+let baseline = null;
+let selected = new Set();
+
+function render() {
+  const chosen = scores.filter(s => selected.has(s.algo_instance));
+  const seriesData = chosen.map(s => ({
+    name: s.algo_instance,
+    value: FIELDS.map(f => +s[f] || 0),
+    areaStyle: { opacity: 0.12 },
+    lineStyle: { width: 2.5 },
+  }));
+  // 行业均值叠加（雷达图第三层，产品实证形态）
+  if (baseline) {
+    seriesData.push({
+      name: '行业均值',
+      value: FIELDS.map(f => +baseline[f] || 0),
+      areaStyle: { opacity: 0.04 },
+      lineStyle: { width: 1.5, type: 'dashed', color: '#F87171' },
+      itemStyle: { color: '#F87171' },
+    });
+  }
+  echarts.init(document.getElementById('radarChart')).setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: {},
+    legend: { bottom: 0, textStyle: { color: '#8B9BB8' },
+      data: [...chosen.map(s => s.algo_instance), ...(baseline ? ['行业均值'] : [])] },
+    radar: {
+      indicator: DIMS.map(d => ({ name: d, max: 100 })),
+      axisName: { color: '#8B9BB8' },
+      splitArea: { areaStyle: { color: ['rgba(34,211,238,0.03)', 'rgba(167,139,250,0.03)'] } },
+      splitLine: { lineStyle: { color: 'rgba(139,155,184,.18)' } },
+      axisLine: { lineStyle: { color: 'rgba(139,155,184,.25)' } },
+    },
+    series: [{ type: 'radar', data: seriesData }],
+  });
+
+  // 明细表（含 vs 行业均值判定）
+  document.getElementById('scoreBody').innerHTML = chosen.map(s => `
+    <tr class="rank-row"><td>${s.algo_instance}</td>
+      ${FIELDS.map(f => `<td>${s[f] ?? '-'}<div style="font-size:11px;color:var(--text-dim)">${
+        s.vsIndustry ? s.vsIndustry[f.replace('_score', '')] ?? '' : ''}</div></td>`).join('')}
+      <td style="color:var(--primary);font-weight:700">${s.total_score ?? '-'}</td></tr>`).join('');
+}
+
+async function renderTrend() {
+  const chosen = [...selected];
+  if (!chosen.length) { echarts.init(document.getElementById('trendChart')).clear(); return; }
+  const portraits = await Promise.all(chosen.map(a =>
+    api(`/api/portrait/algo/${a}?from=${date}&to=${date}`)));
+  const dates = [...new Set(portraits.flatMap(p => p.trend.map(t => t.trade_date)))].sort();
+  echarts.init(document.getElementById('trendChart')).setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: { trigger: 'axis' },
+    legend: { top: 0, textStyle: { color: '#8B9BB8' } },
+    xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    series: portraits.flatMap(p => {
+      const byDate = Object.fromEntries(p.trend.map(t => [t.trade_date, t]));
+      return [
+        { name: p.algoInstance + ' VWAP', type: 'line', smooth: true,
+          data: dates.map(d => byDate[d] ? +(+byDate[d].avg_vwap_bps).toFixed(2) : null) },
+        { name: p.algoInstance + ' TWAP', type: 'line', smooth: true, lineStyle: { type: 'dashed' },
+          data: dates.map(d => byDate[d] ? +(+byDate[d].avg_twap_bps).toFixed(2) : null) },
+      ];
+    }),
+  });
+}
+
+(async function () {
+  const scoreResp = await api('/api/stat/score?date=' + date);
+  scores = scoreResp.instances || [];
+  baseline = scoreResp.industryBaseline || null;
+  selected = new Set(scores.map(s => s.algo_instance));
+  document.getElementById('algoChecks').innerHTML = scores.map((s, i) => `
+    <label class="inline-flex items-center gap-1 cursor-pointer" style="color:${CHART_COLORS[i % CHART_COLORS.length]}">
+      <input type="checkbox" checked data-algo="${s.algo_instance}" class="accent-current"> ${s.algo_instance}
+    </label>`).join('');
+  document.querySelectorAll('#algoChecks input').forEach(cb => cb.addEventListener('change', () => {
+    cb.checked ? selected.add(cb.dataset.algo) : selected.delete(cb.dataset.algo);
+    render(); renderTrend();
+  }));
+  render(); renderTrend();
+})();
+</script>
+</body>
+</html>

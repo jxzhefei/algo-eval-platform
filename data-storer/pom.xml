@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.algoeval</groupId>
+        <artifactId>algo-eval-platform</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>data-storer</artifactId>
+    <name>data-storer</name>
+    <description>数据存储服务：Kafka 攒批消费 + ShardingSphere 按交易日分表 + 幂等 upsert + MySQL→ClickHouse 日同步与对账</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>source-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>trade-ingest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>infra-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+    </dependencies>
+</project>

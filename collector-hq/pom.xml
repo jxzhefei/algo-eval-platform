@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.algoeval</groupId>
+        <artifactId>algo-eval-platform</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>collector-hq</artifactId>
+    <name>collector-hq</name>
+    <description>行情采集服务：插件化行情源 + Disruptor 批处理 + 观察者分发（Redisson 选主门控）</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>source-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>mock-source</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>infra-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.lmax</groupId>
+            <artifactId>disruptor</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+    </dependencies>
+</project>

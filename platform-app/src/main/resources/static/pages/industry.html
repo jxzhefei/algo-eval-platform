@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行业均值 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="page-title mb-1 rise-in">行业均值</div>
+  <div style="color:var(--text-dim);font-size:13px" class="mb-5">全平台算法实例同维度均值——评分"跑赢 / 跑平 / 跑输行业"的基准线</div>
+
+  <div class="glass-panel p-4 mb-4 rise-in" style="animation-delay:.08s">
+    <div class="section-title mb-3">当日行业基线</div>
+    <table>
+      <thead><tr><th>维度</th><th>行业均值</th><th>样本数（算法实例）</th></tr></thead>
+      <tbody id="baselineBody"></tbody>
+    </table>
+  </div>
+
+  <div class="glass-panel p-4 rise-in" style="animation-delay:.15s">
+    <div class="section-title mb-2">多日行业基线走势（五维评分 + 综合）</div>
+    <div id="trendChart" style="height:340px"></div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('industry');
+const date = todayStr();
+const DIMS = { PERF: '绩效', FILL: '完成度', STABILITY: '稳定性', RISK: '风险', IMPACT: '市场冲击', TOTAL: '综合', VWAP: 'VWAP绩效' };
+
+(async function () {
+  const data = await api('/api/stat/industry-baseline?date=' + date);
+  document.getElementById('baselineBody').innerHTML = (data.baseline || []).map(b => `
+    <tr class="rank-row"><td>${DIMS[b.dimension] ?? b.dimension}</td>
+      <td style="color:var(--primary);font-weight:700">${(+b.industry_avg).toFixed(2)}</td>
+      <td>${b.sample_count}</td></tr>`).join('');
+
+  const trend = data.trend || [];
+  const dates = [...new Set(trend.map(t => t.trade_date))].sort();
+  const dims = [...new Set(trend.map(t => t.dimension))];
+  echarts.init(document.getElementById('trendChart')).setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: { trigger: 'axis' }, legend: { top: 0, textStyle: { color: '#8B9BB8' } },
+    xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    series: dims.map(dim => ({
+      name: DIMS[dim] ?? dim, type: 'line', smooth: true,
+      data: dates.map(d => {
+        const row = trend.find(t => t.trade_date === d && t.dimension === dim);
+        return row ? +(+row.industry_avg).toFixed(2) : null;
+      }),
+    })),
+  });
+})();
+</script>
+</body>
+</html>

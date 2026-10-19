@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>算法绩效相关性分析 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">算法绩效相关性分析</div>
+      <div style="color:var(--text-dim);font-size:13px">股价 / 交易时长 / 交易量 / 市占率 × 绩效 四宫格散点（纵轴 VWAP 绩效 bps）</div>
+    </div>
+    <div class="flex gap-2 items-center">
+      <select id="algoSelect"></select>
+      <button id="queryBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(34,211,238,.15);color:var(--primary);border:1px solid rgba(34,211,238,.4)">查询</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.08s">
+      <div class="section-title mb-2">股价绩效相关性</div>
+      <div id="priceChart" style="height:320px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.12s">
+      <div class="section-title mb-2">交易时长绩效相关性</div>
+      <div id="durationChart" style="height:320px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.16s">
+      <div class="section-title mb-2">交易量绩效相关性</div>
+      <div id="volumeChart" style="height:320px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.2s">
+      <div class="section-title mb-2">市占率绩效相关性</div>
+      <div id="participationChart" style="height:320px"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('correlation');
+const date = todayStr();
+
+function scatter(dom, points, xAxisName) {
+  echarts.init(dom).setOption({
+    ...chartBase,
+    tooltip: { trigger: 'item', formatter: p => `${xAxisName} ${p.value[0].toFixed(2)}<br/>绩效 ${p.value[1].toFixed(2)} bps` },
+    grid: { left: 56, right: 20, top: 20, bottom: 40 },
+    xAxis: { type: 'value', name: xAxisName, nameTextStyle: { color: '#8B9BB8' },
+      axisLine: { lineStyle: { color: '#8B9BB8' } },
+      splitLine: { lineStyle: { color: 'rgba(139,155,184,.08)' } } },
+    yAxis: { type: 'value', name: '绩效/bps', nameTextStyle: { color: '#8B9BB8' },
+      splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    series: [{ type: 'scatter', symbolSize: 6,
+      itemStyle: { color: 'rgba(34,211,238,.55)' }, data: points }],
+  });
+}
+
+async function load() {
+  const algo = document.getElementById('algoSelect').value;
+  const data = await api('/api/stat/correlation?date=' + date + (algo ? '&algo=' + algo : ''));
+  scatter(document.getElementById('priceChart'), data.price || [], '股价(元)');
+  scatter(document.getElementById('durationChart'), data.duration || [], '交易时长(分钟)');
+  scatter(document.getElementById('volumeChart'), data.volume || [], '交易量(万)');
+  scatter(document.getElementById('participationChart'), data.participation || [], '市占率(%)');
+}
+
+(async function () {
+  const scores = (await api('/api/stat/score?date=' + date)).instances || [];
+  document.getElementById('algoSelect').innerHTML =
+    '<option value="">全部算法</option>' +
+    scores.map(s => `<option value="${s.algo_instance}">${s.algo_instance}</option>`).join('');
+  document.getElementById('queryBtn').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>

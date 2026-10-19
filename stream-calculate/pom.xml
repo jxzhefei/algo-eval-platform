@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.algoeval</groupId>
+        <artifactId>algo-eval-platform</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>stream-calculate</artifactId>
+    <name>stream-calculate</name>
+    <description>实时计算：滑动窗口绩效 + 撤单率告警 + WebSocket 推送</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>source-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>trade-ingest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+</project>

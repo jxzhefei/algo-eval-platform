@@ -1,0 +1,124 @@
+# ═══ 全量中间件轨道（旗舰档私有化部署形态，对齐设计文档 §12/§13）═══
+# 一条命令拉起：MySQL 8 + Redis 7 + Kafka(KRaft) + Nacos + ClickHouse + Seata Server
+#
+#   docker compose up -d
+#   mvn install -DskipTests -Pfullmw
+#   mvn spring-boot:run -pl platform-app -Dspring-boot.run.profiles=full
+#
+# 组件动机（对齐设计文档）：
+#   mysql    —— 事务型明细/任务表/指标结果（ShardingSphere 按交易日分表，§6.3）
+#   redis    —— Redisson 分布式锁（汇总锁+采集选主，§13.4/§13.6）
+#   kafka    —— 行情(Protobuf QuoteList)/交易双 topic 削峰管道（§5.3）
+#   nacos    —— 注册中心 + 配置中心（多客户差异化配置/灰度/热更新，§13.6）
+#   clickhouse —— 分析库：行情宽表 + 指标宽表，MergeTree 交易日分区（§7；9008 端口对齐真实系统）
+#   seata    —— AT 模式 TC Server：分片批次跨 schema 原子提交（§13.5 可选档位）
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: algoeval-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: algoeval
+      MYSQL_DATABASE: algodb
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-palgoeval"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: algoeval-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: algoeval-kafka
+    environment:
+      # KRaft 单节点（免 ZooKeeper——私有化客户机房少一个组件就少一分运维）
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_NUM_PARTITIONS=6
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: algoeval-nacos
+    environment:
+      # 单机模式（内嵌 Derby 存储；生产部署走 Nacos 集群 + MySQL 存储）
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=256m
+      - JVM_XMX=512m
+    ports:
+      - "8848:8848"   # 控制台/OpenAPI
+      - "9848:9848"   # gRPC（客户端长连接）
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos/v1/console/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: algoeval-clickhouse
+    environment:
+      TZ: Asia/Shanghai
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: algoeval
+    ports:
+      - "8123:8123"   # HTTP（jdbc:clickhouse:// 协议）
+      - "9008:9000"   # native（对齐真实系统 clickhouse-client --port 9008）
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  seata-server:
+    image: seataio/seata-server:2.2.0
+    container_name: algoeval-seata
+    environment:
+      # file 模式注册中心/存储（demo 足够；生产走 Nacos+DB 存储）
+      - SEATA_PORT=8091
+      - STORE_MODE=file
+    ports:
+      - "8091:8091"   # TC 事务协调端口
+      - "7091:7091"   # 控制台
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+  clickhouse-data:

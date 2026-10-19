@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.algoeval</groupId>
+        <artifactId>algo-eval-platform</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>offline-calculate</artifactId>
+    <name>offline-calculate</name>
+    <description>离线并行计算引擎：无中心抢占调度 + 18 指标策略工厂 + Redisson 锁汇总 + Seata 批次事务 + 五维评分 + T0/行业均值</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>source-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.seata</groupId>
+            <artifactId>seata-spring-boot-starter</artifactId>
+            <version>${seata.version}</version>
+        </dependency>
+        <!-- H2 仅用于验证三件套单测（无中间件的本地测试上下文） -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.algoeval.offline.OfflineCalculateApplication</mainClass>
+                    <!-- 保留普通 jar 为主 artifact（供 platform-app 依赖），fat jar 以 exec 分类器附加 -->
+                    <classifier>exec</classifier>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

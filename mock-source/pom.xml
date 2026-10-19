@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.algoeval</groupId>
+        <artifactId>algo-eval-platform</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>mock-source</artifactId>
+    <name>mock-source</name>
+    <description>内置行情生成器插件（GBM 价格游走 + U 型成交量），可打独立 jar 演示动态加载</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.algoeval</groupId>
+            <artifactId>source-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.zeromq</groupId>
+            <artifactId>jeromq</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

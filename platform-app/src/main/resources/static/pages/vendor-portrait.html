@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>算法商画像 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=4">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">算法商画像</div>
+      <div style="color:var(--text-dim);font-size:13px">按算法供应商聚合的横向对比（我方自研与第三方算法商并列评价）</div>
+    </div>
+    <div class="flex gap-2 items-center">
+      <input type="date" id="fromDate"><span style="color:var(--text-dim)">~</span><input type="date" id="toDate">
+      <button id="queryBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(34,211,238,.15);color:var(--primary);border:1px solid rgba(34,211,238,.4)">查询</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.1s">
+      <div class="section-title mb-2">算法商绩效对比（TWAP/VWAP BPS）</div>
+      <div id="perfChart" style="height:320px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.15s">
+      <div class="section-title mb-2">算法商成交金额占比</div>
+      <div id="shareChart" style="height:320px"></div>
+    </div>
+  </div>
+
+  <div class="glass-panel p-4 mt-4 rise-in" style="animation-delay:.2s">
+    <div class="section-title mb-3">算法商指标明细</div>
+    <table>
+      <thead><tr><th>算法供应商</th><th>算法实例数</th><th>成交金额(万)</th><th>母单委托笔数</th>
+        <th>客户数量</th><th>撤单率</th><th>完成率</th><th>TWAP绩效BPS</th><th>VWAP绩效BPS</th><th>平均综合得分</th></tr></thead>
+      <tbody id="vendorBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="/js/common.js?v=4"></script>
+<script>
+renderNav('vendor-portrait');
+document.getElementById('toDate').value = todayStr();
+document.getElementById('fromDate').value = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+
+const fmt = (v, d = 2) => v == null ? '-' : (+v).toLocaleString(undefined, { maximumFractionDigits: d });
+const pct = v => v == null ? '-' : ((+v) * 100).toFixed(2) + '%';
+
+async function load() {
+  const f = document.getElementById('fromDate').value, t = document.getElementById('toDate').value;
+  const rows = await api('/api/stat/vendor-overview?from=' + f + '&to=' + t);
+  const names = rows.map(r => r.algo_vendor);
+  echarts.init(document.getElementById('perfChart')).setOption({
+    ...chartBase,
+    tooltip: { trigger: 'axis' }, legend: { top: 0, textStyle: { color: '#8B9BB8' } },
+    xAxis: { type: 'category', data: names, axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+    series: [
+      { name: 'TWAP绩效BPS', type: 'bar', barWidth: 34, data: rows.map(r => fmt(r.twap_bps)),
+        itemStyle: { color: '#A78BFA', borderRadius: [6, 6, 0, 0] } },
+      { name: 'VWAP绩效BPS', type: 'bar', barWidth: 34, data: rows.map(r => fmt(r.vwap_bps)),
+        itemStyle: { color: '#22D3EE', borderRadius: [6, 6, 0, 0] } },
+    ],
+  });
+  echarts.init(document.getElementById('shareChart')).setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: { trigger: 'item', formatter: '{b}<br/>{c} 万（{d}%）' },
+    legend: { bottom: 0, textStyle: { color: '#8B9BB8' } },
+    series: [{ type: 'pie', radius: ['46%', '70%'],
+      itemStyle: { borderColor: '#0B1220', borderWidth: 3 },
+      label: { color: '#E5EAF5' },
+      data: rows.map(r => ({ name: r.algo_vendor, value: +(+r.turnover / 1e4).toFixed(2) })) }],
+  });
+  document.getElementById('vendorBody').innerHTML = rows.map((r, i) => `
+    <tr class="rank-row ${i < 3 ? 'rank-' + (i + 1) : ''}"><td>${r.algo_vendor}</td>
+      <td>${fmt(r.algo_count, 0)}</td><td>${fmt(r.turnover / 1e4)}</td><td>${fmt(r.parent_orders, 0)}</td>
+      <td>${fmt(r.client_count, 0)}</td><td>${pct(r.cancel_ratio)}</td><td>${pct(r.fill_ratio)}</td>
+      <td>${fmt(r.twap_bps)}</td><td>${fmt(r.vwap_bps)}</td>
+      <td style="color:var(--primary);font-weight:700">${fmt(r.avg_total_score)}</td></tr>`).join('');
+}
+document.getElementById('queryBtn').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>

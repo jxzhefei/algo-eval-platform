@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>算法画像 · 智能算法评价平台</title>
+  <link rel="stylesheet" href="/css/app.css?v=3">
+  <script src="/lib/echarts.min.js"></script>
+</head>
+<body>
+<div class="w-full px-6 py-6 relative" style="z-index:1">
+  <div class="flex items-end justify-between mb-5 rise-in">
+    <div>
+      <div class="page-title">算法画像</div>
+      <div style="color:var(--text-dim);font-size:13px">绩效趋势 · 市占率分桶 · 极值提取 · 自动综述</div>
+    </div>
+    <div class="flex gap-2 items-center">
+      <select id="algoSelect"></select>
+      <input type="date" id="fromDate">
+      <input type="date" id="toDate">
+      <button id="queryBtn" class="px-3 py-1 rounded-lg text-sm"
+              style="background:rgba(34,211,238,.15);color:var(--primary);border:1px solid rgba(34,211,238,.4)">查询</button>
+    </div>
+  </div>
+
+  <!-- 极值卡片 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.05s">
+      <div class="kpi-label">期间母单数</div>
+      <div class="kpi-number mt-1" id="kpiOrders">-</div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.1s">
+      <div class="kpi-label">最优交易日</div>
+      <div class="kpi-number mt-1" style="color:var(--ok);font-size:1.2rem" id="bestDay">-</div>
+      <div style="color:var(--text-dim);font-size:12px" id="bestPerf"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.15s">
+      <div class="kpi-label">最差交易日</div>
+      <div class="kpi-number mt-1" style="color:var(--danger);font-size:1.2rem" id="worstDay">-</div>
+      <div style="color:var(--text-dim);font-size:12px" id="worstPerf"></div>
+    </div>
+  </div>
+
+  <div class="glass-panel p-4 mb-4 rise-in" style="animation-delay:.15s">
+    <div class="section-title mb-2">多日绩效趋势</div>
+    <div id="trendChart" style="height:280px"></div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.2s">
+      <div class="section-title mb-2">市占率分桶 × 绩效</div>
+      <div id="bucketChart" style="height:300px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.25s">
+      <div class="section-title mb-2">交易时长分桶 × 绩效</div>
+      <div id="durationChart" style="height:300px"></div>
+    </div>
+    <div class="glass-panel p-4 rise-in" style="animation-delay:.25s">
+      <div class="section-title mb-2">分桶明细（7 种绩效基准）</div>
+      <div style="max-height:300px;overflow:auto">
+      <table style="font-size:12px">
+        <thead><tr><th>市占率区间</th><th>母单</th><th>VWAP</th><th>VWAP(委托)</th><th>TWAP</th><th>Arrival</th><th>开盘</th><th>收盘</th></tr></thead>
+        <tbody id="bucketBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-panel p-5 mt-4 rise-in" style="animation-delay:.3s">
+    <div class="section-title mb-3">自动综述</div>
+    <div class="narrative-text" id="narrative"></div>
+  </div>
+</div>
+
+<script src="/js/common.js?v=3"></script>
+<script>
+renderNav('portrait');
+const date = todayStr();
+document.getElementById('fromDate').value = date;
+document.getElementById('toDate').value = date;
+
+function typewriter(el, text) {
+  el.textContent = '';
+  let i = 0;
+  (function tick() {
+    if (i <= text.length) { el.textContent = text.slice(0, i++); setTimeout(tick, 18); }
+  })();
+}
+
+async function loadPortrait() {
+  const algo = document.getElementById('algoSelect').value;
+  const from = document.getElementById('fromDate').value;
+  const to = document.getElementById('toDate').value;
+  const [p, n] = await Promise.all([
+    api(`/api/portrait/algo/${algo}?from=${from}&to=${to}`),
+    api(`/api/portrait/algo/${algo}/narrative?from=${from}&to=${to}`),
+  ]);
+
+  document.getElementById('kpiOrders').textContent =
+    p.trend.reduce((s, t) => s + t.order_count, 0).toLocaleString();
+  document.getElementById('bestDay').textContent = p.bestDay.trade_date ?? '-';
+  document.getElementById('bestPerf').textContent = p.bestDay.avg_vwap_bps != null ? `绩效 ${(+p.bestDay.avg_vwap_bps).toFixed(2)} bps` : '';
+  document.getElementById('worstDay').textContent = p.worstDay.trade_date ?? '-';
+  document.getElementById('worstPerf').textContent = p.worstDay.avg_vwap_bps != null ? `绩效 ${(+p.worstDay.avg_vwap_bps).toFixed(2)} bps` : '';
+
+  echarts.init(document.getElementById('trendChart')).setOption({
+    ...chartBase, color: CHART_COLORS,
+    tooltip: { trigger: 'axis' },
+    legend: { top: 0, textStyle: { color: '#8B9BB8' } },
+    xAxis: { type: 'category', data: p.trend.map(t => t.trade_date), axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: [
+      { type: 'value', name: 'bps', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+      { type: 'value', name: '得分', max: 100, splitLine: { show: false } },
+    ],
+    series: [
+      { name: 'VWAP绩效', type: 'line', smooth: true, data: p.trend.map(t => +(+t.avg_vwap_bps).toFixed(2)) },
+      { name: 'TWAP绩效', type: 'line', smooth: true, data: p.trend.map(t => +(+t.avg_twap_bps).toFixed(2)) },
+      { name: '综合得分', type: 'line', smooth: true, yAxisIndex: 1,
+        data: p.trend.map(t => t.total_score), areaStyle: { opacity: 0.08 } },
+    ],
+  });
+
+  const bucketChart = (dom, buckets) => echarts.init(dom).setOption({
+    ...chartBase,
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: buckets.map(b => b.bucket), axisLine: { lineStyle: { color: '#8B9BB8' } } },
+    yAxis: [
+      { type: 'value', name: 'bps', splitLine: { lineStyle: { color: 'rgba(139,155,184,.12)' } } },
+      { type: 'value', name: '笔数', splitLine: { show: false } },
+    ],
+    series: [
+      { name: 'VWAP绩效', type: 'bar', barWidth: 30,
+        data: buckets.map(b => b.vwap_perf_bps == null ? null : +(+b.vwap_perf_bps).toFixed(2)),
+        itemStyle: { color: '#22D3EE', borderRadius: [6, 6, 0, 0] } },
+      { name: '笔数', type: 'line', yAxisIndex: 1, data: buckets.map(b => b.parent_orders),
+        itemStyle: { color: '#FBBF24' } },
+    ],
+  });
+  bucketChart(document.getElementById('bucketChart'), p.participationBuckets || []);
+  bucketChart(document.getElementById('durationChart'), p.durationBuckets || []);
+
+  const bps = v => v == null ? '-' : (+v).toFixed(2);
+  document.getElementById('bucketBody').innerHTML = (p.participationBuckets || []).map(b => `
+    <tr class="rank-row"><td>${b.bucket}</td><td>${b.parent_orders}</td>
+      <td>${bps(b.vwap_perf_bps)}</td><td>${bps(b.vwap_ot_perf_bps)}</td><td>${bps(b.twap_perf_bps)}</td>
+      <td>${bps(b.arrival_perf_bps)}</td><td>${bps(b.open_perf_bps)}</td><td>${bps(b.close_perf_bps)}</td>
+    </tr>`).join('');
+
+  typewriter(document.getElementById('narrative'), n.narrative);
+}
+
+(async function () {
+  const scores = (await api('/api/stat/score?date=' + date)).instances || [];
+  document.getElementById('algoSelect').innerHTML =
+    scores.map(s => `<option value="${s.algo_instance}">${s.algo_instance}</option>`).join('');
+  document.getElementById('queryBtn').addEventListener('click', loadPortrait);
+  if (scores.length) loadPortrait();
+})();
+</script>
+</body>
+</html>
